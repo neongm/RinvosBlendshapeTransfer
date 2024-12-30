@@ -13,7 +13,7 @@ Experiment with it, you might find perfect settings for your case by just playin
 ## Quick Start Guide
 
 ### Installation 
-1. Download the .zip file for the plugin.
+1. Download the .zip file for the plugin [here](https://github.com/neongm/RinvosBlendshapeTransfer/releases)
 2. Open Blender and go to Edit > Preferences > Add-ons.
 3. Click Install... and select the downloaded .zip file.
 4. Enable the plugin by checking the box next to its name.
