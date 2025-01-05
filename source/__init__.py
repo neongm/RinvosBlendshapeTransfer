@@ -92,7 +92,7 @@ class BlendshapeTransferPanel(bpy.types.Panel):
         scene = context.scene
 
         # Debugging: Print the current mode and active object
-        print(f"Current Mode: {bpy.context.active_object.mode if bpy.context.active_object else 'No active object'}")
+        # print(f"Current Mode: {bpy.context.active_object.mode if bpy.context.active_object else 'No active object'}")
 
         # Source and Target Selection
         box = layout.box()
@@ -342,13 +342,13 @@ class ExitPaintModeOperator(bpy.types.Operator):
         return {'FINISHED'}
 
 # Handler to automatically refresh the blendshape list when shape keys are added/removed
-@persistent
-def blendshape_update_handler(scene, depsgraph):
-    for update in depsgraph.updates:
-        if update.is_updated_geometry:
-            obj = update.object
-            if obj and obj == scene.bs_source and obj.data.shape_keys:
-                update_blendshape_list(scene, bpy.context)
+# @persistent
+# def blendshape_update_handler(scene, depsgraph):
+#     for update in depsgraph.updates:
+#         if update.is_updated_geometry:
+#             obj = update.object
+#             if obj and obj == scene.bs_source and obj.data.shape_keys:
+#                 update_blendshape_list(scene, bpy.context)
 
 # Operator to refresh the blendshape list
 class BlendshapeRefreshOperator(bpy.types.Operator):
@@ -358,6 +358,31 @@ class BlendshapeRefreshOperator(bpy.types.Operator):
     def execute(self, context):
         update_blendshape_list(context.scene, context)
         return {'FINISHED'}
+
+def update_preview_modifiers(scene):
+    source = scene.bs_source
+
+    if not source:
+        return
+
+    # Remove existing preview modifiers if they exist
+    for mod in source.modifiers:
+        if mod.name.startswith("Preview_"):
+            source.modifiers.remove(mod)
+
+    # Add preview modifiers if preview is enabled
+    if scene.bs_preview_subdivision:
+        subdiv_mod = source.modifiers.new(name="Preview_Subdivision", type="SUBSURF")
+        subdiv_mod.levels = scene.bs_subdivision_levels
+        subdiv_mod.render_levels = scene.bs_subdivision_levels
+        if scene.bs_subdivision_type_simple:
+            subdiv_mod.subdivision_type = 'SIMPLE'
+
+    if scene.bs_preview_displace:
+        displace_mod = source.modifiers.new(name="Preview_Displace", type="DISPLACE")
+        displace_mod.strength = scene.bs_displace_strength
+        displace_mod.mid_level = scene.bs_displace_midlevel
+        displace_mod.direction = scene.bs_displace_direction
 
 # Registration
 classes = [
@@ -416,14 +441,14 @@ def register():
     )
 
     # Add the handler to automatically refresh the blendshape list
-    bpy.app.handlers.depsgraph_update_post.append(blendshape_update_handler)
+    # bpy.app.handlers.depsgraph_update_post.append(blendshape_update_handler)
 
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
 
     # Remove the handler
-    bpy.app.handlers.depsgraph_update_post.remove(blendshape_update_handler)
+    # bpy.app.handlers.depsgraph_update_post.remove(blendshape_update_handler)
 
     del bpy.types.Scene.bs_source
     del bpy.types.Scene.bs_target
