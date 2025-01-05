@@ -8,7 +8,7 @@ bl_info = {
     "name": "Rinvo's Blendshape Transfer",
     "blender": (4, 0, 0),
     "category": "3D View",
-    "version": (0, 4, 0),
+    "version": (0, 4, 3),
     "location": "3D View > Sidebar",
     "warning": "Plugin is still under development",  # Optional warning text
     "doc_url": "https://jinxxy.com/rinvo/RinvosBlendshapeTransfer",
