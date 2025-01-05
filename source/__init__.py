@@ -91,9 +91,6 @@ class BlendshapeTransferPanel(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
-        # Debugging: Print the current mode and active object
-        # print(f"Current Mode: {bpy.context.active_object.mode if bpy.context.active_object else 'No active object'}")
-
         # Source and Target Selection
         box = layout.box()
         box.label(text="Source and Target Selection")
@@ -341,15 +338,6 @@ class ExitPaintModeOperator(bpy.types.Operator):
 
         return {'FINISHED'}
 
-# Handler to automatically refresh the blendshape list when shape keys are added/removed
-# @persistent
-# def blendshape_update_handler(scene, depsgraph):
-#     for update in depsgraph.updates:
-#         if update.is_updated_geometry:
-#             obj = update.object
-#             if obj and obj == scene.bs_source and obj.data.shape_keys:
-#                 update_blendshape_list(scene, bpy.context)
-
 # Operator to refresh the blendshape list
 class BlendshapeRefreshOperator(bpy.types.Operator):
     bl_idname = "object.refresh_blendshapes"
@@ -446,15 +434,9 @@ def register():
         update=lambda self, context: update_preview_modifiers(context.scene)
     )
 
-    # Add the handler to automatically refresh the blendshape list
-    # bpy.app.handlers.depsgraph_update_post.append(blendshape_update_handler)
-
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
-
-    # Remove the handler
-    # bpy.app.handlers.depsgraph_update_post.remove(blendshape_update_handler)
 
     del bpy.types.Scene.bs_source
     del bpy.types.Scene.bs_target
