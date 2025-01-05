@@ -370,6 +370,12 @@ def update_preview_modifiers(scene):
         if mod.name.startswith("Preview_"):
             source.modifiers.remove(mod)
 
+    # Disable preview if modifier usage is disabled
+    if scene.bs_preview_subdivision and not scene.bs_use_subdivision:
+        scene.bs_preview_subdivision = False
+    if scene.bs_preview_displace and not scene.bs_use_displace:
+        scene.bs_preview_displace = False
+
     # Add preview modifiers if preview is enabled
     if scene.bs_preview_subdivision:
         subdiv_mod = source.modifiers.new(name="Preview_Subdivision", type="SUBSURF")
@@ -413,12 +419,12 @@ def register():
     bpy.types.Scene.bs_falloff = bpy.props.FloatProperty(default=4.0, min=0.1, max=16.0)
 
     # Experimental properties
-    bpy.types.Scene.bs_use_subdivision = bpy.props.BoolProperty(default=False, name="Use Subdivision Modifier")
-    bpy.types.Scene.bs_subdivision_type_simple = bpy.props.BoolProperty(default=False, name="Subdivision Type Simple")
-    bpy.types.Scene.bs_subdivision_levels = bpy.props.IntProperty(default=1, min=0, max=6, name="Subdivision Levels")
-    bpy.types.Scene.bs_use_displace = bpy.props.BoolProperty(default=False, name="Use Displace Modifier")
-    bpy.types.Scene.bs_displace_strength = bpy.props.FloatProperty(default=0.01, min=0.0, name="Displace Strength")
-    bpy.types.Scene.bs_displace_midlevel = bpy.props.FloatProperty(default=0.8, min=0.0, max=1.0, name="Displace Midlevel")
+    bpy.types.Scene.bs_use_subdivision = bpy.props.BoolProperty(default=False, name="Use Subdivision Modifier", update=lambda self, context: update_preview_modifiers(context.scene))
+    bpy.types.Scene.bs_subdivision_type_simple = bpy.props.BoolProperty(default=False, name="Subdivision Type Simple", update=lambda self, context: update_preview_modifiers(context.scene))
+    bpy.types.Scene.bs_subdivision_levels = bpy.props.IntProperty(default=1, min=0, max=6, name="Subdivision Levels", update=lambda self, context: update_preview_modifiers(context.scene))
+    bpy.types.Scene.bs_use_displace = bpy.props.BoolProperty(default=False, name="Use Displace Modifier", update=lambda self, context: update_preview_modifiers(context.scene))
+    bpy.types.Scene.bs_displace_strength = bpy.props.FloatProperty(default=0.01, min=0.0, name="Displace Strength", update=lambda self, context: update_preview_modifiers(context.scene))
+    bpy.types.Scene.bs_displace_midlevel = bpy.props.FloatProperty(default=0.8, min=0.0, max=1.0, name="Displace Midlevel", update=lambda self, context: update_preview_modifiers(context.scene))
     bpy.types.Scene.bs_displace_direction = bpy.props.EnumProperty(
         name="Displace Direction",
         items=[
