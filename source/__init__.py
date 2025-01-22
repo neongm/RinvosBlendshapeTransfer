@@ -20,8 +20,16 @@ bl_info = {
 # Utility Functions
 def update_blendshape_list(scene, context):
     """Update the blendshape list based on the selected source object."""
-    # Save the current selection state
-    selected_keys = {item.name for item in scene.bs_shape_keys if item.select}
+    # Save the current state of the blendshape items
+    saved_data = {
+        item.name: {
+            "select": item.select,
+            "target_key_name": item.target_key_name,
+            "source_key_name": item.source_key_name,
+            "sync_value": item.sync_value,
+        }
+        for item in scene.bs_shape_keys
+    }
     
     # Clear the list and repopulate it
     scene.bs_shape_keys.clear()
@@ -30,7 +38,89 @@ def update_blendshape_list(scene, context):
         for key in source.data.shape_keys.key_blocks:
             item = scene.bs_shape_keys.add()
             item.name = key.name
-            item.select = key.name in selected_keys  # Restore the selection state
+            # Restore the saved state if it exists
+            if key.name in saved_data:
+                item.select = saved_data[key.name]["select"]
+                if(key.name in scene.bs_target.data.shape_keys.key_blocks):
+                    item.target_key_name = saved_data[key.name]["target_key_name"]
+                    item.source_key_name = saved_data[key.name]["source_key_name"]
+                    item.sync_value = saved_data[key.name]["sync_value"]
+            else:
+                item.select = False  # Default to not selected if no saved state
+
+def load_target(scene, context):
+    """Load saved data from the target object when it changes."""
+    target = scene.bs_target
+
+    # If the target is None, clear the list and return
+    if not target:
+        scene.bs_shape_keys.clear()
+        source = scene.bs_source
+        if source and source.data.shape_keys:
+            for key in source.data.shape_keys.key_blocks:
+                item = scene.bs_shape_keys.add()
+                item.name = key.name
+        return
+
+    # If the target is new (no saved data), clear the list and show default values
+    if "bs_saved_data" not in target:
+        scene.bs_shape_keys.clear()
+        update_blendshape_list(scene, context)  # Populate the list with default values
+        return
+
+    # If the target has saved data, load it
+    saved_data = target["bs_saved_data"]
+
+    # Clear the list and repopulate it based on the source object
+    scene.bs_shape_keys.clear()
+    source = scene.bs_source
+    target = scene.bs_target
+
+    if source and source.data.shape_keys:
+        for key in source.data.shape_keys.key_blocks:
+            item = scene.bs_shape_keys.add()
+            item.name = key.name
+
+            # Restore the saved state if it exists
+            if key.name in saved_data and key.name in target.data.shape_keys.key_blocks:
+                item.select = saved_data[key.name]["select"]
+                item.target_key_name = saved_data[key.name]["target_key_name"]
+                item.source_key_name = saved_data[key.name]["source_key_name"]
+                item.sync_value = saved_data[key.name]["sync_value"]
+            else:
+                # Reset properties for blendshapes that don't exist on the target
+                item.select = False
+                item.target_key_name = ""
+                item.source_key_name = ""
+                item.sync_value = key.value  # Set sync_value to the source object's shape key value
+
+    # Reset blendshapes that are gone from the target
+    for item in scene.bs_shape_keys:
+        if item.name not in saved_data:
+            # Reset properties for blendshapes that are gone from the target
+            item.select = False
+            item.target_key_name = ""
+            item.source_key_name = ""
+            item.sync_value = key.value  # Set sync_value to the source object's shape key value
+
+def save_target(scene, context):
+    """Save the current state of the blendshape list to the target object."""
+    if scene.bs_target:
+        current_data = {
+            item.name: {
+                "select": item.select,
+                "target_key_name": item.target_key_name,
+                "source_key_name": item.source_key_name,
+                "sync_value": item.sync_value,
+            }
+            for item in scene.bs_shape_keys
+        }
+        scene.bs_target["bs_saved_data"] = current_data
+
+# Update the target property to call load_target when the target changes
+def update_target(scene, context):
+    """Update the target object and load saved data if available."""
+    load_target(scene, context)
 
 def save_and_reset_shape_key_states(source):
     """Save the current values of all shape keys on the source object and reset them."""
@@ -59,8 +149,35 @@ def ensure_transfer_mask_vertex_group(target):
 
 # Property Group for Blendshapes
 class BlendshapeItem(bpy.types.PropertyGroup):
+    # on update sync value of the target's blendshape with the source's blendshape value
+    def update_sync_value(self, context):
+        target = bpy.context.scene.bs_target
+        if(target):
+            source_key_name = self.source_key_name
+            target_key_name = self.target_key_name
+
+            
+            # Ensure the target and source shape keys exist
+            if target.data.shape_keys.key_blocks.get(target_key_name) and bpy.context.scene.bs_source.data.shape_keys.key_blocks.get(source_key_name):
+                # Sync the values of the target and source shape keys
+                target_value = self.sync_value
+                target.data.shape_keys.key_blocks[target_key_name].value = target_value
+                bpy.context.scene.bs_source.data.shape_keys.key_blocks[source_key_name].value = target_value
+                
+                target.active_shape_key_index = target.data.shape_keys.key_blocks.find(target_key_name)
+
+
+
     name: bpy.props.StringProperty(name="Blendshape Name")
     select: bpy.props.BoolProperty(name="Select", default=False)
+    sync_value: bpy.props.FloatProperty(name="Sync Value", default=0.0, min=0.0, max=1.0, update=update_sync_value)
+    
+    target_key_name: bpy.props.StringProperty(name="Target Key Name", default="")
+    source_key_name: bpy.props.StringProperty(name="Source Key Name", default="")
+
+
+
+
 
 # Custom Operator to Open Web Links
 class OpenWebLinkOperator(bpy.types.Operator):
@@ -77,7 +194,25 @@ class UI_UL_BlendshapeList(bpy.types.UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_prop):
         row = layout.row()
         row.label(text=item.name, icon='SHAPEKEY_DATA')
+
+        #row.prop(item, "select", text="", icon='CHECKBOX_HLT' if item.select else 'CHECKBOX_DEHLT')
+
+        # add a slider that will update the sync_value of the target object
+        if(item.target_key_name != ""):
+            #show synced icon
+            row.scale_x = 0.6
+            row.label(text="", icon='LINKED')
+            row.prop(item, "sync_value", text="", slider=True)
+        else:
+            row.scale_x = 0.6
+            row.label(text="", icon='BLANK1')
+            row.prop(context.scene.bs_source.data.shape_keys.key_blocks[item.name], "value", text="", slider=True)
+        row.scale_x = 1
         row.prop(item, "select", text="", icon='CHECKBOX_HLT' if item.select else 'CHECKBOX_DEHLT')
+
+
+
+
 
 # Blendshape Transfer Panel
 class BlendshapeTransferPanel(bpy.types.Panel):
@@ -205,7 +340,7 @@ class BlendshapeTransferOperator(bpy.types.Operator):
             self.report({'ERROR'}, "Source object has no shape keys!")
             return {'CANCELLED'}
 
-        selected_keys = [shape.name for shape in scene.bs_shape_keys if shape.select]
+        selected_keys = [shape for shape in scene.bs_shape_keys if shape.select]
         if not selected_keys:
             self.report({'ERROR'}, "No blendshapes selected!")
             return {'CANCELLED'}
@@ -216,6 +351,8 @@ class BlendshapeTransferOperator(bpy.types.Operator):
 
         # Save and reset shape key states
         saved_states = save_and_reset_shape_key_states(source)
+        saved_states_target = save_and_reset_shape_key_states(target)
+
 
         # Set all the shapekeys on source to 0
         for key in source.data.shape_keys.key_blocks:
@@ -263,13 +400,22 @@ class BlendshapeTransferOperator(bpy.types.Operator):
         bpy.ops.object.surfacedeform_bind(modifier=surf_mod.name)
 
         # Transfer blendshapes
-        for key_name in selected_keys:
+        for shape in selected_keys:
+            key_name = shape.name
+
             key_block = source.data.shape_keys.key_blocks.get(key_name)
+
             if not key_block:
                 self.report({'WARNING'}, f"Blendshape '{key_name}' not found, skipping.")
                 continue
+            
+            source_key_name = f"{key_block.name}"  # Use the full name of the shape key
+            sync_value = key_block.value # save for later too
 
+            # reset on source
             key_block.value = 1.0
+            
+            # reset on target
 
             if key_name in target.data.shape_keys.key_blocks:
                 if scene.bs_override_existing:
@@ -280,10 +426,17 @@ class BlendshapeTransferOperator(bpy.types.Operator):
             bpy.ops.object.modifier_apply_as_shapekey(keep_modifier=True, modifier=surf_mod.name)
             target.data.shape_keys.key_blocks[-1].name = key_name
 
+            # shape = [shape for shape in scene.bs_shape_keys if shape.name == source_key_name][0]
+
+            shape.target_key_name = key_name
+            shape.source_key_name = source_key_name
+            shape.sync_value = sync_value
+
             key_block.value = 0.0
 
         # Restore shape key states
         restore_shape_key_states(source, saved_states)
+        restore_shape_key_states(target, saved_states_target)
 
         # Remove optional Subdivision modifier
         if scene.bs_use_subdivision:
@@ -294,6 +447,9 @@ class BlendshapeTransferOperator(bpy.types.Operator):
 
         bpy.ops.object.modifier_remove(modifier=surf_mod.name)
         self.report({'INFO'}, f"Successfully transferred {len(selected_keys)} blendshapes.")
+
+        save_target(context.scene, context)
+
         return {'FINISHED'}
 
 # Operator to toggle weight paint mode for the transfer mask
@@ -396,7 +552,7 @@ def register():
         bpy.utils.register_class(cls)
     
     bpy.types.Scene.bs_source = bpy.props.PointerProperty(type=bpy.types.Object, update=update_blendshape_list)
-    bpy.types.Scene.bs_target = bpy.props.PointerProperty(type=bpy.types.Object)
+    bpy.types.Scene.bs_target = bpy.props.PointerProperty(type=bpy.types.Object, update=update_target)
     bpy.types.Scene.bs_shape_keys = bpy.props.CollectionProperty(type=BlendshapeItem)
     bpy.types.Scene.bs_shape_key_index = bpy.props.IntProperty()
     bpy.types.Scene.bs_override_existing = bpy.props.BoolProperty(default=True)
