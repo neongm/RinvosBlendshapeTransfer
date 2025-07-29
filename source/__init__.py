@@ -2,6 +2,7 @@
 
 import bpy
 import webbrowser
+import bmesh
 from bpy.app.handlers import persistent
 
 bl_info = {
@@ -146,6 +147,25 @@ def ensure_transfer_mask_vertex_group(target):
         for vertex in target.data.vertices:
             transfer_mask_group.add([vertex.index], 1.0, 'REPLACE')
     return "BlendshapeTransferMask"
+
+def ensure_surface_deform_compatibility(obj):
+    """Simply triangulate the input object"""
+    bmo = bmesh.new()
+    bmo.from_mesh(obj.data)
+
+    nonmanifold = []
+
+    for edge in bmo.edges:
+        if not edge.is_manifold:
+            nonmanifold.append(edge)
+    
+    if nonmanifold != []:
+        bmesh.ops.split_edges(bmo, edges=nonmanifold)
+
+    bmesh.ops.triangulate(bmo, faces=bmo.faces[:])
+
+    bmo.to_mesh(obj.data)
+    bmo.free()
 
 # Property Group for Blendshapes
 class BlendshapeItem(bpy.types.PropertyGroup):
@@ -329,7 +349,9 @@ class BlendshapeTransferOperator(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-        source = scene.bs_source
+        source = scene.bs_source.copy()
+        source.data = scene.bs_source.data.copy()
+        context.collection.objects.link(source)
         target = scene.bs_target
 
         if not source or not target:
@@ -381,6 +403,9 @@ class BlendshapeTransferOperator(bpy.types.Operator):
             source.data.shape_keys.key_blocks[-1].value = 1.0
         
             source.modifiers.remove(displace_mod)
+
+        # Making sure the source Mesh is compatible with Surface Deform
+        ensure_surface_deform_compatibility(source)
 
         # Ensure Basis shape key exists
         if not target.data.shape_keys:
@@ -449,6 +474,13 @@ class BlendshapeTransferOperator(bpy.types.Operator):
         self.report({'INFO'}, f"Successfully transferred {len(selected_keys)} blendshapes.")
 
         save_target(context.scene, context)
+
+        for ob in bpy.context.selected_objects:
+            ob.select = False
+
+        source.select = True
+        bpy.context.view_layer.objects.active = source
+        bpy.ops.object.delete()
 
         return {'FINISHED'}
 
