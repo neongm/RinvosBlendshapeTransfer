@@ -9,7 +9,7 @@ bl_info = {
     "name": "Rinvo's Blendshape Transfer",
     "blender": (4, 0, 0),
     "category": "3D View",
-    "version": (0, 4, 3),
+    "version": (0, 5, 0),
     "location": "3D View > Sidebar",
     "warning": "Plugin is still under development",  # Optional warning text
     "doc_url": "https://jinxxy.com/rinvo/RinvosBlendshapeTransfer",
@@ -153,19 +153,20 @@ def ensure_surface_deform_compatibility(obj):
     bmo = bmesh.new()
     bmo.from_mesh(obj.data)
 
-    nonmanifold = []
+    bmesh.ops.triangulate(bmo, faces=bmo.faces[:])
 
+    nonmanifold = []
     for edge in bmo.edges:
         if not edge.is_manifold:
             nonmanifold.append(edge)
-    
+
     if nonmanifold != []:
         bmesh.ops.split_edges(bmo, edges=nonmanifold)
 
-    bmesh.ops.triangulate(bmo, faces=bmo.faces[:])
 
     bmo.to_mesh(obj.data)
     bmo.free()
+
 
 # Property Group for Blendshapes
 class BlendshapeItem(bpy.types.PropertyGroup):
@@ -349,16 +350,14 @@ class BlendshapeTransferOperator(bpy.types.Operator):
 
     def execute(self, context):
         scene = context.scene
-        source = scene.bs_source.copy()
-        source.data = scene.bs_source.data.copy()
-        context.collection.objects.link(source)
         target = scene.bs_target
+        
 
-        if not source or not target:
+        if not scene.bs_source or not target:
             self.report({'ERROR'}, "Source or target object not set!")
             return {'CANCELLED'}
 
-        if not source.data.shape_keys:
+        if not scene.bs_source.data.shape_keys:
             self.report({'ERROR'}, "Source object has no shape keys!")
             return {'CANCELLED'}
 
@@ -366,6 +365,11 @@ class BlendshapeTransferOperator(bpy.types.Operator):
         if not selected_keys:
             self.report({'ERROR'}, "No blendshapes selected!")
             return {'CANCELLED'}
+        
+        # movied down here because we need to verify before we copy the source
+        source = scene.bs_source.copy()
+        source.data = scene.bs_source.data.copy()
+        context.collection.objects.link(source)
 
         # Ensure Object Mode
         if bpy.context.mode != 'OBJECT':
@@ -475,10 +479,17 @@ class BlendshapeTransferOperator(bpy.types.Operator):
 
         save_target(context.scene, context)
 
-        for ob in bpy.context.selected_objects:
-            ob.select = False
 
-        source.select = True
+        # if bpy.app.version >= (4, 0, 0):
+        #     ob.select_set(False)  # Blender 4.0+
+        # else:
+        #     ob.select = False  # Blender < 4.0
+
+
+        for ob in bpy.context.selected_objects:
+            ob.select_set(False)
+
+        source.select_set(True)
         bpy.context.view_layer.objects.active = source
         bpy.ops.object.delete()
 
