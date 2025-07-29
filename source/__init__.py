@@ -9,10 +9,10 @@ bl_info = {
     "name": "Rinvo's Blendshape Transfer",
     "blender": (4, 0, 0),
     "category": "3D View",
-    "version": (0, 5, 0),
+    "version": (0, 5, 1),
     "location": "3D View > Sidebar",
     "warning": "Plugin is still under development",  # Optional warning text
-    "doc_url": "https://jinxxy.com/rinvo/RinvosBlendshapeTransfer",
+    "doc_url": "https://github.com/neongm/RinvosBlendshapeTransfer",
     "tracker_url": "",
     "author": "Rinvo",
     "description": "Transfer blendshapes (shape keys) from one object to another using Surface Deform.\n\n"
